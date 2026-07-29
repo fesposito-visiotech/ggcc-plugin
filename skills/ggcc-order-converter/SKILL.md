@@ -147,13 +147,21 @@ Cuando el usuario pase un PDF de pedido:
       herramienta: NO escribas un script en Python para generar el Excel ni
       reconstruyas las columnas a mano.
 11. **El fichero lo escribe la herramienta; tú solo dices dónde está.** Devuelve
-    `ruta` (absoluta), `nombre_fichero`, `filas` y `avisos`. Si tu entorno tiene
-    una carpeta de entregables, pásala en `ruta_salida` y el .xlsx aparece
-    directamente ahí. Enséñale al usuario la `ruta` y termina.
-    - **Los bytes del .xlsx no pasan nunca por ti.** No los pidas, no los
-      transcribas y no reconstruyas el fichero a mano: el Excel ya está escrito.
-      Si tiene que acabar en otra carpeta, **cópialo con `cp`** (una copia es byte
-      a byte); no lo regeneres ni lo vuelques desde texto.
+    `nombre_fichero`, `filas`, `avisos` y **una** de estas dos claves, según cómo
+    esté desplegado el servidor. Mira cuál viene y actúa en consecuencia:
+    - **`url`** — el Excel está en el servidor. Dáselo al usuario como **enlace
+      markdown clicable** (`[nombre_fichero](url)`) y termina. **No** intentes
+      copiarlo, moverlo ni leerlo: ese fichero no está en el sistema de ficheros
+      del usuario ni en el tuyo. Y **no pases `ruta_salida`**: en este modo se
+      ignora (te lo dirá en `avisos`).
+    - **`ruta`** — ruta absoluta en disco, el mismo disco que ves tú. Enséñasela
+      al usuario y termina. Si tu entorno tiene una carpeta de entregables,
+      pásala en `ruta_salida` y el .xlsx aparece directamente ahí; si tiene que
+      acabar en otra carpeta, **cópialo con `cp`** (una copia es byte a byte), no
+      lo regeneres ni lo vuelques desde texto.
+    - **Los bytes del .xlsx no pasan nunca por ti**, en ninguno de los dos modos.
+      No los pidas, no los transcribas y no reconstruyas el fichero a mano: el
+      Excel ya está escrito.
     - Si `avisos` no viene vacío, menciónalos: son líneas cuyo producto no está
       en el catálogo de Odoo (típico de una resuelta a mano con una referencia sin
       dar de alta). El Excel se genera igual; el usuario debe saberlo.
