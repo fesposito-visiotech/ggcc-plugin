@@ -4,14 +4,5 @@
   "author": {
     "name": "Visiotech",
     "email": "desarrollos.sat.visiotech@gmail.com"
-  },
-  "userConfig": {
-    "mcp_token": {
-      "type": "string",
-      "title": "Token de acceso al servidor GGCC",
-      "description": "Token proporcionado por fesposito para autenticarte contra el servidor MCP remoto. Se guarda cifrado y no se vuelve a mostrar.",
-      "sensitive": true,
-      "required": true
-    }
   }
 }
