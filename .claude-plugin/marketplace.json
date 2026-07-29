@@ -1,0 +1,14 @@
+{
+  "name": "visiotech-ggcc",
+  "owner": {
+    "name": "Visiotech",
+    "email": "fesposito@visiotechsecurity.com"
+  },
+  "plugins": [
+    {
+      "name": "ggcc-order-converter",
+      "source": "./",
+      "description": "Procesa un PDF de pedido de Grandes Cuentas y genera un Excel listo para importar en Odoo."
+    }
+  ]
+}

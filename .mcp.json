@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ggcc-order-converter": {
+      "type": "http",
+      "url": "https://dev.sat.visiotechsecurity.com/mcp-ggcc",
+      "headers": {
+        "Authorization": "Bearer ${user_config.mcp_token}"
+      }
+    }
+  }
+}
