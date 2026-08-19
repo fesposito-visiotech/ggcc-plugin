@@ -142,7 +142,11 @@ Cuando el usuario pase un PDF de pedido:
     por línea del pedido, en su orden, con `producto`, `cantidad` y `precio`.
     - `producto` = el `default_code` de `buscar_referencias` o el que confirmó el
       usuario en la revisión (repito: NO el SAP code ni la referencia del cliente).
-    - `precio` = precio neto unitario. El descuento lo deja vacío la herramienta.
+    - `precio` = precio neto unitario. `descuento` es opcional y por defecto la
+      herramienta lo deja vacío: solo lo incluyes si las instrucciones de ese
+      cliente concreto (campo `instrucciones` de `detectar_cliente`) piden
+      explícitamente capturar el % de descuento por línea (p. ej. Tecmelec);
+      para el resto de clientes omítelo, el precio ya viene neto.
     - Las columnas, su orden y qué va solo en la primera fila los fija la
       herramienta: NO escribas un script en Python para generar el Excel ni
       reconstruyas las columnas a mano.
