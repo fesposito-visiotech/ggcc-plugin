@@ -26,6 +26,12 @@ description: Procesa un PDF de pedido de Grandes Cuentas y genera un Excel listo
 > Que un fichero salga con `existe: false` no es un error: significa que el ETL
 > que lo genera aún no se ha ejecutado y que ese paso de la cascada no casa nada.
 
+> **Varios pedidos en el mismo turno.** Si el usuario adjunta más de un PDF de
+> pedido a la vez, sigue el **flujo de LOTE** (última sección de este
+> documento) en vez de aplicar los pasos 1-11 de abajo a un solo PDF. El flujo
+> de lote reutiliza estos mismos pasos por número; no hace falta leerlo si
+> solo hay un PDF.
+
 Cuando el usuario pase un PDF de pedido:
 
 1. **Primera pasada (solo el cliente).** Lee el PDF únicamente para extraer el
@@ -36,9 +42,15 @@ Cuando el usuario pase un PDF de pedido:
    (el fichero usado).
    - Anuncia en una línea qué instrucciones aplicas, p. ej.
      "Aplicando instrucciones personalizadas para `cliente_id`".
-   - Si `cliente_id` es null (no reconocido), pregunta al usuario de qué cliente
-     es. Recibirás igualmente las instrucciones genéricas de `_default.md`: úsalas
-     para el parseo y continúa.
+   - Si `cliente_id` es null (no reconocido), **NO preguntes todavía**. Sigue
+     con las instrucciones genéricas de `_default.md` para el parseo y
+     continúa, usando `cliente_id=""` en el paso 4: `cliente_id` solo hace
+     falta para el encabezado del Excel (paso 10) y las cabeceras de tabla, no
+     bloquea el matching (a lo sumo, el paso de mapeo aprendido no casará nada
+     para este pedido, que es un resultado normal). Marca este pedido como
+     **"cliente pendiente de confirmar"**: la pregunta por su nombre exacto en
+     Odoo se hace más adelante, como la primera elicitación del paso 8 —junto
+     con las demás preguntas de este pedido, en el mismo bloque—, nunca antes.
 3. **Segunda pasada (las líneas y la cabecera).** Lee y parsea, **aplicando las
    reglas del campo `instrucciones`** (trátalas como autoritativas para ese
    cliente: qué columna trae la referencia, cómo elegirla, descripciones
@@ -107,7 +119,13 @@ Cuando el usuario pase un PDF de pedido:
      completa del pedido —y cuántas preguntas le esperan— antes de que le
      empieces a preguntar. Primero la tabla, en su propio mensaje; las preguntas
      del paso 8 vienen después.
-8. **Para cada línea que NO esté `"resuelto"`, resuélvela una por una con
+8. **Si este pedido quedó con el cliente "pendiente de confirmar" (paso 2),
+   esa es la PRIMERA pregunta de este bloque**, antes de cualquier línea
+   dudosa: pide con elicitación de texto libre el nombre EXACTO del cliente en
+   Odoo. La respuesta pasa a ser el `cliente_id` definitivo de este pedido: es
+   el que usarás en el paso 10 como `cliente` de `generar_excel`.
+
+   **Para cada línea que NO esté `"resuelto"`, resuélvela una por una con
    elicitación** (pregunta con opciones, no texto libre), en este orden, mostrando
    el progreso ("línea 1 de 3", "línea 2 de 3"...):
    - Da contexto de la línea (ref. cliente, descripción, cantidad, precio) para
@@ -137,7 +155,8 @@ Cuando el usuario pase un PDF de pedido:
    opciones: **"Sí, generar el Excel"** y **"No"**. Genera el Excel SOLO si el
    usuario elige "Sí".
 10. **El Excel lo genera la herramienta `generar_excel`, no lo montes tú.** Llámala
-    con `cliente` (el `cliente_id` de `detectar_cliente`), `referencia_cliente`
+    con `cliente` (el `cliente_id` confirmado: el que devolvió `detectar_cliente`,
+    o el que respondió el usuario en el paso 8 si no se reconoció), `referencia_cliente`
     (el PO del paso 3, cadena vacía si el pedido no trae) y `lineas`: una entrada
     por línea del pedido, en su orden, con `producto`, `cantidad` y `precio`.
     - `producto` = el `default_code` de `buscar_referencias` o el que confirmó el
@@ -169,3 +188,63 @@ Cuando el usuario pase un PDF de pedido:
     - Si `avisos` no viene vacío, menciónalos: son líneas cuyo producto no está
       en el catálogo de Odoo (típico de una resuelta a mano con una referencia sin
       dar de alta). El Excel se genera igual; el usuario debe saberlo.
+
+## Flujo de lote (varios pedidos a la vez)
+
+Cuando el usuario adjunta más de un PDF de pedido en el mismo turno. Reutiliza
+los pasos 1-11 de arriba por número; aquí solo se describe el ORDEN en que se
+aplican a varios pedidos. Nada de tabla combinada de todos los pedidos ni de
+mezclar las preguntas de pedidos distintos en una sola cola: se comprueba todo
+primero y se revisa un pedido entero de cada vez.
+
+### Fase A — Comprobación de todos los pedidos (sin preguntar, salvo lo ya aplazado)
+
+Por cada PDF, en el orden en que se han recibido:
+
+1. Aplica los pasos 1, 2, 3 y 4 tal cual — una sola llamada a
+   `buscar_referencias` por pedido (nunca una por línea). Si el cliente de
+   este PDF no se reconoce, aplica el aplazamiento del paso 2: sigue con
+   `_default.md` y `cliente_id=""`, y marca el pedido como "cliente pendiente
+   de confirmar" — no preguntes su nombre aquí.
+2. Anuncia el resultado en **una sola línea de progreso** (nunca una tabla),
+   p. ej.: `Pedido 2/5 leído (Cliente X, PO 123): 14 líneas, 3 dudosas.` Si el
+   cliente quedó pendiente, dilo ahí (`Cliente: por confirmar`) en vez de
+   preguntar.
+3. Guarda en tu propio contexto de trabajo (no hace falta fichero ni estado
+   persistente: todo vive dentro de este turno) para cada pedido: su
+   `cliente_id` (o "pendiente"), su `referencia_cliente` (PO), sus líneas
+   originales y los resultados de `buscar_referencias`, en el mismo orden.
+
+Cuando los N pedidos del lote están leídos:
+
+4. Reúne el conjunto de fabricantes distintos que aparecen en los
+   `candidatos` de TODAS las líneas dudosas de TODOS los pedidos, y llama a
+   `obtener_instrucciones_fabricante` **una vez por cada fabricante distinto
+   de todo el lote** — nunca una vez por pedido ni una vez por línea. Es la
+   misma regla del paso 5, generalizada al lote completo: si un fabricante
+   aparece en las dudosas de varios pedidos, sus reglas se piden una sola vez.
+5. Muestra una única línea de resumen de todo el lote, p. ej.:
+   `Lote de 5 pedidos leído: 42 líneas en total, 9 pendientes de confirmar en 3 pedidos.`
+
+### Fase B — Recorrido pedido a pedido
+
+Para cada pedido del lote, en el mismo orden en que se leyeron, hasta
+agotarlo:
+
+1. Encabezado propio de este pedido, p. ej.:
+   `Pedido X de N — Cliente: <cliente_id o "por confirmar"> — PO: <referencia_cliente>`.
+2. La tabla compacta del paso 7, pero con **solo las líneas de este pedido**
+   (nunca combinada con otros pedidos del lote) y el recuento de pendientes de
+   **este pedido únicamente**.
+3. El bloque de elicitación de este pedido (paso 8): si su cliente quedó
+   "pendiente de confirmar" en la Fase A, esa es la primera pregunta del
+   bloque; después, una elicitación por cada línea no-resuelta de este pedido,
+   con las mismas reglas de siempre (progreso "línea Y de Z", candidatos
+   exactos que ya devolvió el servidor, nada añadido).
+4. La confirmación Sí/No del paso 9 para este pedido, y si es "Sí",
+   `generar_excel` (pasos 10-11) para este pedido — con su `cliente_id`
+   definitivo y su `referencia_cliente` — mostrando su `ruta`/`url` y avisos.
+5. Pasa al pedido siguiente (vuelve a 1) hasta terminar el lote.
+
+Al terminar el lote entero, cierra con un resumen breve: la lista de
+ficheros/enlaces generados, uno por pedido, y cualquier aviso agregado.
